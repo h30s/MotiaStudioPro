@@ -68,11 +68,14 @@ export function HeroSection() {
                         <span className="ml-4 text-sm text-slate-400">motia-studio-pro</span>
                     </div>
                     <div className="p-8 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-                        <div className="aspect-video rounded-lg bg-slate-950/50 border border-slate-700 flex items-center justify-center">
-                            <div className="text-center">
-                                <Play className="w-16 h-16 text-primary-400 mx-auto mb-4" />
-                                <p className="text-slate-400">Demo Video Coming Soon</p>
-                            </div>
+                        <div className="aspect-video rounded-lg bg-slate-950/50 border border-slate-700 overflow-hidden">
+                            <iframe
+                                className="w-full h-full"
+                                src="https://www.youtube.com/embed/b0HXfEO2Txw"
+                                title="Motia Studio Pro Demo"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                            ></iframe>
                         </div>
                     </div>
                 </div>
