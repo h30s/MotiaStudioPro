@@ -12,15 +12,32 @@ export async function POST(
 ) {
     try {
         const projectId = params.id;
+        const body = await request.json().catch(() => ({}));
 
         console.log('[Deploy API] Received deployment request for project:', projectId);
 
-        // Get project
-        const project = db.getProject(projectId);
+        // Try to get project from database first, then fallback to request body
+        let project = db.getProject(projectId);
+
+        // If not found in DB (Vercel scenario), use project data from request body
+        if (!project && body.projectData) {
+            console.log('[Deploy API] Using project data from request body (Vercel mode)');
+            project = body.projectData;
+
+            // Save to DB for consistency (type assertion safe here as we checked body.projectData)
+            try {
+                if (project) {
+                    db.createProject(project);
+                }
+            } catch (e) {
+                console.warn('[Deploy API] Could not save project to DB:', e);
+            }
+        }
+
         if (!project) {
-            console.error('[Deploy API] Project not found:', projectId);
+            console.error('[Deploy API] Project not found in DB or request body:', projectId);
             return NextResponse.json(
-                { error: 'Project not found', projectId },
+                { error: 'Project not found. Please provide project data in request body.', projectId },
                 { status: 404 }
             );
         }

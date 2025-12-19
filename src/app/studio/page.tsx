@@ -104,6 +104,7 @@ export default function StudioPage() {
                 {currentView === "deploy" && (
                     <DeployPanel
                         projectId={projectData?.projectId || null}
+                        projectData={projectData}
                     />
                 )}
             </main>

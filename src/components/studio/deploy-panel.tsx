@@ -5,8 +5,23 @@ import { Rocket, Loader2, CheckCircle, XCircle, ExternalLink, Copy, Check } from
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
+interface ProjectData {
+    projectId: string;
+    name: string;
+    description: string;
+    files: Array<{ path: string; language: string; content?: string }>;
+    code?: string;
+    fileCount?: number;
+    status?: string;
+    language?: string;
+    userId?: string;
+    createdAt?: Date;
+    updatedAt?: Date;
+}
+
 interface DeployPanelProps {
     projectId: string | null;
+    projectData?: ProjectData | null;
 }
 
 type DeployStatus = "idle" | "deploying" | "success" | "error";
@@ -16,7 +31,7 @@ interface DeploymentStep {
     status: "pending" | "running" | "completed" | "error";
 }
 
-export function DeployPanel({ projectId }: DeployPanelProps) {
+export function DeployPanel({ projectId, projectData }: DeployPanelProps) {
     const [deployStatus, setDeployStatus] = useState<DeployStatus>("idle");
     const [deploymentUrl, setDeploymentUrl] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
@@ -34,10 +49,27 @@ export function DeployPanel({ projectId }: DeployPanelProps) {
         setDeployStatus("deploying");
 
         try {
-            // Call real deployment API
+            // Call real deployment API with project data for Vercel compatibility
             const response = await fetch(`/api/deploy/${projectId}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    projectData: projectData ? {
+                        id: projectData.projectId,
+                        userId: projectData.userId || 'demo-user',
+                        name: projectData.name,
+                        description: projectData.description,
+                        status: projectData.status || 'ready',
+                        language: (projectData.language as 'typescript' | 'python' | 'go') || 'typescript',
+                        files: projectData.files.map(f => ({
+                            path: f.path,
+                            language: f.language,
+                            content: f.content || ''
+                        })),
+                        createdAt: projectData.createdAt || new Date(),
+                        updatedAt: projectData.updatedAt || new Date()
+                    } : undefined
+                }),
             });
 
             if (!response.ok) {
