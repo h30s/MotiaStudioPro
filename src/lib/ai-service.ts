@@ -109,32 +109,41 @@ export class AIService {
     private buildPrompt(description: string, language: string, features: string[]): string {
         const featuresText = features.length > 0 ? `\nRequired features: ${features.join(', ')}` : '';
 
-        return `You are an expert Motia backend developer. Generate production-ready code based on this description:
+        return `You are an expert Motia backend code generator. Generate ONLY executable code files - NO tutorials, NO step-by-step instructions, NO markdown formatting.
 
-${description}${featuresText}
-
+Project Description: ${description}${featuresText}
 Language: ${language}
 
-Generate a complete Motia backend project with the following structure:
-1. Main workflow file (workflow.ts or workflow.py or workflow.go)
-2. Step definitions (steps.ts or steps.py or steps.go)
-3. Configuration file (config.ts or config.py or config.go)
-4. README.md with usage instructions
+CRITICAL INSTRUCTIONS:
+1. Generate ONLY executable code files
+2. NO "Step 1", "Step 2" or tutorial text
+3. NO markdown code blocks or explanations OUTSIDE the file markers
+4. Use ONLY the ===FILE:=== marker format shown below
+5. Include minimal inline comments within the code only
 
-Requirements:
-- Use Motia Steps and Workflows
+Required Files:
+- Main workflow file (src/workflow.${language === 'typescript' ? 'ts' : language === 'python' ? 'py' : 'go'})
+- Step definitions (src/steps.${language === 'typescript' ? 'ts' : language === 'python' ? 'py' : 'go'})
+- Configuration (src/config.${language === 'typescript' ? 'ts' : language === 'python' ? 'py' : 'go'})
+- README.md with API documentation
+
+Code Requirements:
+- Use Motia Steps and Workflows properly
 - Include comprehensive error handling
-- Add detailed comments explaining the code
+- Production-ready with validation
 - Follow ${language} best practices
-- Make it production-ready with proper validation
-- Include retry logic where appropriate
+- Add retry logic for critical operations
 
-IMPORTANT: Format your response EXACTLY like this (including the markers):
+OUTPUT FORMAT - Use EXACTLY this structure (NO other text allowed):
 ===FILE: path/to/file===
-[file content here]
+[actual executable code here]
 ===END FILE===
 
-Generate all necessary files now:`;
+===FILE: another/file===
+[actual executable code here]
+===END FILE===
+
+Generate the complete project now using ONLY the ===FILE:=== markers:`;
     }
 
     private parseGeneratedCode(text: string, language: string): ProjectFile[] {
@@ -162,29 +171,75 @@ Generate all necessary files now:`;
     }
 
     private generateFallbackCode(description: string, language: string): ProjectFile[] {
-        // Simple fallback for when AI fails
+        // Enhanced fallback for when AI fails to parse
         if (language === 'typescript') {
             return [
                 {
                     path: 'src/workflow.ts',
-                    content: `// Generated Motia Workflow
-import { Step, workflow } from 'motia';
+                    content: `import { Step, workflow } from 'motia';
+import { config } from './config';
+import { processStep, validateStep } from './steps';
 
 // ${description}
 
 export const mainWorkflow = workflow({
   name: 'main-workflow',
-  steps: [
-    Step({
-      name: 'process',
-      async handler(context) {
-        // TODO: Implement your logic here
-        console.log('Processing request:', context);
-        return { success: true };
-      }
-    })
-  ]
-});`,
+  description: '${description}',
+  retryPolicy: config.retryPolicy,
+  steps: [validateStep, processStep]
+});
+
+export default mainWorkflow;`,
+                    language: 'typescript',
+                },
+                {
+                    path: 'src/steps.ts',
+                    content: `import { Step } from 'motia';
+
+export const validateStep: Step = {
+  name: 'validate-input',
+  description: 'Validate incoming data',
+  async handler(context) {
+    if (!context.input) {
+      throw new Error('Input is required');
+    }
+    console.log('✅ Input validated:', context.input);
+    return context.input;
+  }
+};
+
+export const processStep: Step = {
+  name: 'process-data',
+  description: 'Process the validated data',
+  async handler(context) {
+    const result = {
+      success: true,
+      data: context.input,
+      processedAt: new Date().toISOString()
+    };
+    console.log('✅ Data processed:', result);
+    return result;
+  }
+};`,
+                    language: 'typescript',
+                },
+                {
+                    path: 'src/config.ts',
+                    content: `import { WorkflowConfig } from 'motia';
+
+export const config: WorkflowConfig = {
+  name: 'Generated Workflow',
+  description: '${description}',
+  retryPolicy: {
+    maxRetries: 3,
+    backoffStrategy: {
+      initialDelay: 1000,
+      multiplier: 2,
+    },
+  },
+};
+
+export default config;`,
                     language: 'typescript',
                 },
                 {
@@ -194,15 +249,25 @@ export const mainWorkflow = workflow({
 ## Description
 ${description}
 
+## Structure
+- \`src/workflow.ts\` - Main workflow definition
+- \`src/steps.ts\` - Step implementations
+- \`src/config.ts\` - Configuration
+
 ## Usage
 \`\`\`bash
+npm install motia
 motia dev
 \`\`\`
 
+## API Endpoints
+The workflow exposes the following endpoints:
+- POST /workflow - Execute the main workflow
+
 ## Next Steps
-1. Review the generated code
-2. Customize the workflow logic
-3. Add your business logic
+1. Review and customize the step logic
+2. Add your business requirements
+3. Test thoroughly
 4. Deploy to production
 `,
                     language: 'markdown',
