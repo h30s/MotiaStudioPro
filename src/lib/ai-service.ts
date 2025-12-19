@@ -22,138 +22,406 @@ export class AIService {
     async generateCode(options: AIGenerateOptions): Promise<ProjectFile[]> {
         const { description, language, features = [] } = options;
 
-        // Check if API key is configured
-        if (!this.apiKey || this.apiKey.trim() === '') {
-            throw new Error(
-                'GROQ_API_KEY is not configured. Please add it to your .env file. ' +
-                'Get your free API key from https://console.groq.com'
-            );
+        // Use template-based generation for reliable output
+        console.log(`🤖 Generating ${language} project: "${description}"`);
+
+        // Generate using templates (no AI parsing issues!)
+        const files = await this.generateFromTemplates(description, language, features);
+
+        console.log(`✅ Generated ${files.length} files successfully`);
+        return files;
+    }
+
+    private async generateFromTemplates(
+        description: string,
+        language: string,
+        features: string[]
+    ): Promise<ProjectFile[]> {
+        // Template-based generation ensures valid code structure
+        if (language === 'typescript') {
+            return this.generateTypeScriptProject(description, features);
+        } else if (language === 'python') {
+            return this.generatePythonProject(description, features);
+        } else if (language === 'go') {
+            return this.generateGoProject(description, features);
         }
 
-        // Build the prompt
-        const prompt = this.buildPrompt(description, language, features);
+        return this.generateFallbackCode(description, language);
+    }
 
-        try {
-            // Call Groq API using OpenAI-compatible chat completions
-            const response = await fetch(GROQ_API_URL, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${this.apiKey}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    model: GROQ_MODEL,
-                    messages: [
-                        {
-                            role: 'system',
-                            content: 'You are an expert Motia backend developer who generates production-ready code.',
-                        },
-                        {
-                            role: 'user',
-                            content: prompt,
-                        },
-                    ],
-                    temperature: 0.7,
-                    max_tokens: 4000,
-                }),
+    private generateTypeScriptProject(description: string, features: string[]): ProjectFile[] {
+        const projectName = this.extractProjectName(description);
+        const hasDB = description.toLowerCase().includes('database') ||
+            description.toLowerCase().includes('crud') ||
+            features.some(f => f.toLowerCase().includes('database'));
+
+        const files: ProjectFile[] = [];
+
+        // 1. Package.json
+        files.push({
+            path: 'package.json',
+            content: `{
+  "name": "${projectName.toLowerCase().replace(/\s+/g, '-')}",
+  "version": "1.0.0",
+  "description": "${description}",
+  "scripts": {
+    "start": "ts-node src/index.ts",
+    "dev": "nodemon --exec ts-node src/index.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "motia": "^1.0.0"${hasDB ? ',\n    "@types/node": "^20.0.0"' : ''}
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.0",
+    "nodemon": "^3.0.0"
+  }
+}`,
+            language: 'json'
+        });
+
+        // 2. TypeScript Config
+        files.push({
+            path: 'tsconfig.json',
+            content: `{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "outDir": "./dist",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  }
+}`,
+            language: 'json'
+        });
+
+        // 3. Config file
+        files.push({
+            path: 'src/config.ts',
+            content: `import { WorkflowConfig } from 'motia';
+
+export const config: WorkflowConfig = {
+  name: '${projectName}',
+  description: '${description}',
+  retryPolicy: {
+    maxRetries: 3,
+    backoffStrategy: {
+      initialDelay: 1000,
+      multiplier: 2,
+    },
+  },
+};
+
+export default config;`,
+            language: 'typescript'
+        });
+
+        // 4. Database utilities (if needed)
+        if (hasDB) {
+            files.push({
+                path: 'src/db.ts',
+                content: `// Simple in-memory database for demo
+const db: Map<string, any> = new Map();
+
+export const database = {
+  async create(id: string, data: any) {
+    db.set(id, { id, ...data, createdAt: new Date().toISOString() });
+    return db.get(id);
+  },
+  
+  async read(id: string) {
+    return db.get(id) || null;
+  },
+  
+  async update(id: string, data: any) {
+    const existing = db.get(id);
+    if (!existing) throw new Error('Not found');
+    const updated = { ...existing, ...data, updatedAt: new Date().toISOString() };
+    db.set(id, updated);
+    return updated;
+  },
+  
+  async delete(id: string) {
+    const existed = db.has(id);
+    db.delete(id);
+    return existed;
+  },
+  
+  async list() {
+    return Array.from(db.values());
+  }
+};`,
+                language: 'typescript'
             });
+        }
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(
-                    `Groq API error (${response.status}): ${errorData.error?.message || response.statusText}`
-                );
-            }
+        // 5. Steps file
+        files.push({
+            path: 'src/steps.ts',
+            content: `import { Step } from 'motia';${hasDB ? "\nimport { database } from './db';" : ''}
 
-            const data = await response.json();
-            const generatedText = data.choices?.[0]?.message?.content || '';
+export const validateInput: Step = {
+  name: 'validate-input',
+  description: 'Validate incoming request data',
+  async handler(context) {
+    if (!context.input) {
+      throw new Error('Input is required');
+    }
+    console.log('✅ Input validated');
+    return context.input;
+  }
+};
 
-            if (!generatedText) {
-                throw new Error('No content generated from Groq API');
-            }
+export const processRequest: Step = {
+  name: 'process-request',
+  description: 'Process the validated request',
+  async handler(context) {
+    const { action, data } = context.input;
+    
+    ${hasDB ? `// CRUD operations
+    switch (action) {
+      case 'create':
+        const created = await database.create(data.id || Date.now().toString(), data);
+        return { success: true, data: created };
+      
+      case 'read':
+        const item = await database.read(data.id);
+        return { success: true, data: item };
+      
+      case 'update':
+        const updated = await database.update(data.id, data);
+        return { success: true, data: updated };
+      
+      case 'delete':
+        await database.delete(data.id);
+        return { success: true, message: 'Deleted successfully' };
+      
+      case 'list':
+        const items = await database.list();
+        return { success: true, data: items };
+      
+      default:
+        throw new Error(\`Unknown action: \${action}\`);
+    }` : `// Process the data
+    const result = {
+      success: true,
+      data,
+      processedAt: new Date().toISOString()
+    };
+    console.log('✅ Request processed');
+    return result;`}
+  }
+};
 
-            // Parse the generated code into files
-            const files = this.parseGeneratedCode(generatedText, language);
+export const steps = [validateInput, processRequest];`,
+            language: 'typescript'
+        });
 
-            // If parsing failed, log the raw response for debugging
-            if (files.length === 0) {
-                console.warn('⚠️ Groq API returned content but parsing failed. Raw response:', generatedText.substring(0, 500));
-                console.warn('Using fallback code generation...');
-                return this.generateFallbackCode(description, language);
-            }
+        // 6. Workflow file
+        files.push({
+            path: 'src/workflow.ts',
+            content: `import { workflow } from 'motia';
+import { config } from './config';
+import { steps } from './steps';
 
-            return files;
-        } catch (error: any) {
-            console.error('❌ AI Generation Error:', error);
+export const mainWorkflow = workflow({
+  name: '${projectName.toLowerCase().replace(/\s+/g, '-')}',
+  description: '${description}',
+  retryPolicy: config.retryPolicy,
+  steps
+});
 
-            // Provide helpful error messages
-            if (error.message?.includes('401') || error.message?.includes('API key')) {
-                throw new Error(
-                    'Invalid Groq API key. Please check your .env file and get a valid key from ' +
-                    'https://console.groq.com'
-                );
-            }
+export default mainWorkflow;`,
+            language: 'typescript'
+        });
 
-            if (error.message?.includes('429') || error.message?.includes('quota') || error.message?.includes('rate limit')) {
-                throw new Error('Groq API rate limit exceeded. Please try again later.');
-            }
+        // 7. Main entry point
+        files.push({
+            path: 'src/index.ts',
+            content: `import { mainWorkflow } from './workflow';
 
-            // Re-throw other errors instead of silently failing
-            throw new Error(
-                `Failed to generate code: ${error.message || 'Unknown error'}. ` +
-                'Check your GROQ_API_KEY and internet connection.'
-            );
+// Example usage
+async function main() {
+  try {
+    console.log('🚀 Starting workflow...');
+    
+    ${hasDB ? `// Example: Create an item
+    const createResult = await mainWorkflow.run({
+      action: 'create',
+      data: { id: '1', name: 'Example Item' }
+    });
+    console.log('Created:', createResult);
+    
+    // Example: List all items
+    const listResult = await mainWorkflow.run({
+      action: 'list',
+      data: {}
+    });
+    console.log('List:', listResult);` : `const result = await mainWorkflow.run({
+      message: 'Hello from Motia!',
+      timestamp: new Date().toISOString()
+    });
+    console.log('Result:', result);`}
+    
+    console.log('✅ Workflow completed successfully');
+  } catch (error) {
+    console.error('❌ Workflow failed:', error);
+    process.exit(1);
+  }
+}
+
+main();`,
+            language: 'typescript'
+        });
+
+        // 8. README
+        files.push({
+            path: 'README.md',
+            content: `# ${projectName}
+
+${description}
+
+## Installation
+
+\`\`\`bash
+npm install
+\`\`\`
+
+## Usage
+
+\`\`\`bash
+npm run dev
+\`\`\`
+${hasDB ? `
+## API Operations
+
+The workflow supports CRUD operations:
+- **Create**: \`{ action: 'create', data: { id, ...fields } }\`
+- **Read**: \`{ action: 'read', data: { id } }\`
+- **Update**: \`{ action: 'update', data: { id, ...fields } }\`
+- **Delete**: \`{ action: 'delete', data: { id } }\`
+- **List**: \`{ action: 'list', data: {} }\`
+` : ''}
+## Project Structure
+
+- \`src/workflow.ts\` - Main workflow definition
+- \`src/steps.ts\` - Step implementations
+- \`src/config.ts\` - Configuration${hasDB ? '\n- `src/db.ts` - Database utilities' : ''}
+- \`src/index.ts\` - Entry point
+
+## Next Steps
+
+1. Customize the step logic in \`src/steps.ts\`
+2. Add your business requirements
+3. Test thoroughly
+4. Deploy to production
+`,
+            language: 'markdown'
+        });
+
+        return files;
+    }
+
+    private generatePythonProject(description: string, features: string[]): ProjectFile[] {
+        // Add Python templates here
+        return this.generateFallbackCode(description, 'python');
+    }
+
+    private generateGoProject(description: string, features: string[]): ProjectFile[] {
+        // Add Go templates here
+        return this.generateFallbackCode(description, 'go');
+    }
+
+    private extractProjectName(description: string): string {
+        const lowerDesc = description.toLowerCase();
+
+        if (lowerDesc.includes("payment") || lowerDesc.includes("stripe")) {
+            return "Payment API";
+        } else if (lowerDesc.includes("todo") || lowerDesc.includes("task")) {
+            return "Todo API";
+        } else if (lowerDesc.includes("crud") || lowerDesc.includes("rest")) {
+            return "REST API";
+        } else if (lowerDesc.includes("webhook")) {
+            return "Webhook Handler";
+        } else if (lowerDesc.includes("ai") || lowerDesc.includes("agent")) {
+            return "AI Agent";
+        } else if (lowerDesc.includes("ecommerce") || lowerDesc.includes("shop")) {
+            return "E-commerce API";
+        } else if (lowerDesc.includes("auth") || lowerDesc.includes("login")) {
+            return "Auth Service";
+        } else if (lowerDesc.includes("notification") || lowerDesc.includes("email")) {
+            return "Notification Service";
+        } else {
+            return "Custom API";
         }
     }
 
     private buildPrompt(description: string, language: string, features: string[]): string {
         const featuresText = features.length > 0 ? `\nRequired features: ${features.join(', ')}` : '';
+        const ext = language === 'typescript' ? 'ts' : language === 'python' ? 'py' : 'go';
 
-        return `You are an expert Motia backend code generator. Generate ONLY executable code files - NO tutorials, NO step-by-step instructions, NO markdown formatting.
+        return `Generate ONLY raw executable code. NO markdown, NO explanations, NO tutorials.
 
-Project Description: ${description}${featuresText}
-Language: ${language}
+Task: ${description}${featuresText}
 
-CRITICAL INSTRUCTIONS:
-1. Generate ONLY executable code files
-2. NO "Step 1", "Step 2" or tutorial text
-3. NO markdown code blocks or explanations OUTSIDE the file markers
-4. Use ONLY the ===FILE:=== marker format shown below
-5. Include minimal inline comments within the code only
+RULES (FOLLOW EXACTLY):
+- Output ONLY the ===FILE:=== markers with code inside
+- NO triple backticks (\`\`\`) anywhere
+- NO bullet points or "Method:", "Request:", etc.
+- NO step-by-step instructions
+- Just pure executable ${language} code
 
-Required Files:
-- Main workflow file (src/workflow.${language === 'typescript' ? 'ts' : language === 'python' ? 'py' : 'go'})
-- Step definitions (src/steps.${language === 'typescript' ? 'ts' : language === 'python' ? 'py' : 'go'})
-- Configuration (src/config.${language === 'typescript' ? 'ts' : language === 'python' ? 'py' : 'go'})
-- README.md with API documentation
-
-Code Requirements:
-- Use Motia Steps and Workflows properly
-- Include comprehensive error handling
-- Production-ready with validation
-- Follow ${language} best practices
-- Add retry logic for critical operations
-
-OUTPUT FORMAT - Use EXACTLY this structure (NO other text allowed):
-===FILE: path/to/file===
-[actual executable code here]
+Required structure:
+===FILE: src/workflow.${ext}===
+import { workflow } from 'motia';
+import { steps } from './steps';
+export const mainWorkflow = workflow({ name: 'api', steps });
 ===END FILE===
 
-===FILE: another/file===
-[actual executable code here]
+===FILE: src/steps.${ext}===
+import { Step } from 'motia';
+export const steps: Step[] = [/* your steps */];
 ===END FILE===
 
-Generate the complete project now using ONLY the ===FILE:=== markers:`;
+===FILE: src/config.${ext}===
+export const config = { retryPolicy: { maxRetries: 3 } };
+===END FILE===
+
+===FILE: README.md===
+# API Documentation
+## Endpoints
+- POST /api/endpoint
+===END FILE===
+
+NOW generate the complete ${language} project for: ${description}
+Use ONLY ===FILE:=== markers. Start NOW:`;
     }
 
     private parseGeneratedCode(text: string, language: string): ProjectFile[] {
         const files: ProjectFile[] = [];
-        const fileRegex = /===FILE:\s*(.+?)===\n([\s\S]*?)===END FILE===/g;
+
+        // Clean up the text first - remove any markdown artifacts
+        let cleaned = text
+            .replace(/```[\w]*\n/g, '') // Remove opening code blocks
+            .replace(/```/g, '')         // Remove closing code blocks
+            .replace(/^\*\*[^*]+\*\*:?\s*/gm, '') // Remove bold markdown headers
+            .replace(/^[-*]\s+/gm, '');  // Remove bullet points
+
+        const fileRegex = /===FILE:\s*(.+?)===\s*\n([\s\S]*?)===END FILE===/g;
 
         let match;
-        while ((match = fileRegex.exec(text)) !== null) {
+        while ((match = fileRegex.exec(cleaned)) !== null) {
             const path = match[1].trim();
-            const content = match[2].trim();
+            let content = match[2].trim();
+
+            // Additional cleaning for code content
+            content = content
+                .replace(/^```[\w]*\n/gm, '')
+                .replace(/^```$/gm, '')
+                .trim();
 
             files.push({
                 path,
