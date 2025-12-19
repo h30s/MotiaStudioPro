@@ -10,7 +10,7 @@
 [![Motia](https://img.shields.io/badge/Motia-Powered-blueviolet?style=for-the-badge)](https://motia.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
 
-[🎥 Demo Video](#) • [🌐 Live Demo](https://motia-studio-pro.vercel.app/) • [📖 Documentation](#)
+[🎥 Demo Video](https://www.youtube.com/watch?v=b0HXfEO2Txw) • [🌐 Live Demo](https://motia-studio-pro.vercel.app/) • [📖 Documentation](https://motia-studio-pro.vercel.app/docs)
 
 </div>
 
