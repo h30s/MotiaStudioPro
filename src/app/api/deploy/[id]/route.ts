@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { generateId, estimateDeploymentTime, sleep } from '@/lib/utils';
 
+// Ensure we use Node.js runtime for this API route
+export const runtime = 'nodejs';
+
 export async function POST(
     request: NextRequest,
     { params }: { params: { id: string } }

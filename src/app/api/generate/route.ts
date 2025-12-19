@@ -3,6 +3,9 @@ import { generateId } from "@/lib/utils";
 import { aiService } from "@/lib/ai-service";
 import { db } from "@/lib/db";
 
+// Ensure we use Node.js runtime for this API route (not Edge)
+export const runtime = 'nodejs';
+
 export async function POST(request: NextRequest) {
   try {
     const { description, language = 'typescript', features = [] } = await request.json();

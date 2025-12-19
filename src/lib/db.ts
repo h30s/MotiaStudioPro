@@ -1,74 +1,13 @@
-// Persistent filesystem-based database for MVP
-// Data survives server restarts and hot-reloads
-// For production, replace with PostgreSQL/Prisma
+// Adaptive database that works both locally and on Vercel
+// Local: Uses filesystem for persistence
+// Vercel: Uses in-memory storage (ephemeral)
+// For production scale, replace with PostgreSQL/Prisma or Vercel KV
 
 import { Project, Deployment, Template } from './types';
-import fs from 'fs';
-import path from 'path';
-
-const DB_DIR = path.join(process.cwd(), '.data');
-const PROJECTS_FILE = path.join(DB_DIR, 'projects.json');
-const DEPLOYMENTS_FILE = path.join(DB_DIR, 'deployments.json');
-const TEMPLATES_FILE = path.join(DB_DIR, 'templates.json');
-
-// Ensure data directory and files exist
-if (!fs.existsSync(DB_DIR)) {
-    fs.mkdirSync(DB_DIR, { recursive: true });
-}
-
-// Initialize empty files if they don't exist
-[PROJECTS_FILE, DEPLOYMENTS_FILE, TEMPLATES_FILE].forEach(file => {
-    if (!fs.existsSync(file)) {
-        fs.writeFileSync(file, '{}', 'utf-8');
-    }
-});
-
-// Helper to safely read JSON file with better error handling
-function readJsonFile<T>(filePath: string, defaultValue: T): T {
-    try {
-        if (!fs.existsSync(filePath)) {
-            console.log(`⚠️  File not found: ${filePath}, using default`);
-            return defaultValue;
-        }
-
-        const data = fs.readFileSync(filePath, 'utf-8');
-        if (!data || data.trim() === '') {
-            console.log(`⚠️  Empty file: ${filePath}, using default`);
-            return defaultValue;
-        }
-
-        // Convert date strings back to Date objects
-        const parsed = JSON.parse(data, (key, value) => {
-            if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/.test(value)) {
-                return new Date(value);
-            }
-            return value;
-        });
-
-        return parsed;
-    } catch (error) {
-        console.error(`❌ Error reading ${filePath}:`, error);
-        return defaultValue;
-    }
-}
-
-// Helper to safely write JSON file with atomic write
-function writeJsonFile<T>(filePath: string, data: T): void {
-    try {
-        const jsonString = JSON.stringify(data, null, 2);
-        const tempFile = `${filePath}.tmp`;
-
-        // Write to temp file first
-        fs.writeFileSync(tempFile, jsonString, 'utf-8');
-
-        // Atomic rename
-        fs.renameSync(tempFile, filePath);
-    } catch (error) {
-        console.error(`❌ Error writing ${filePath}:`, error);
-    }
-}
+import { createAdapter } from './db-adapter';
 
 class Database {
+    private adapter = createAdapter();
     private projects: Map<string, Project>;
     private deployments: Map<string, Deployment>;
     private templates: Map<string, Template>;
@@ -82,16 +21,16 @@ class Database {
         this.reload();
     }
 
-    // Reload data from disk
+    // Reload data from storage
     private reload(): void {
         const now = Date.now();
         if (now - this.lastLoadTime < this.RELOAD_INTERVAL) {
             return; // Don't reload too frequently
         }
 
-        const projectsData = readJsonFile<Record<string, Project>>(PROJECTS_FILE, {});
-        const deploymentsData = readJsonFile<Record<string, Deployment>>(DEPLOYMENTS_FILE, {});
-        const templatesData = readJsonFile<Record<string, Template>>(TEMPLATES_FILE, {});
+        const projectsData = this.adapter.getProjects();
+        const deploymentsData = this.adapter.getDeployments();
+        const templatesData = this.adapter.getTemplates();
 
         this.projects = new Map(Object.entries(projectsData));
         this.deployments = new Map(Object.entries(deploymentsData));
@@ -103,17 +42,17 @@ class Database {
 
     private saveProjects(): void {
         const data = Object.fromEntries(this.projects.entries());
-        writeJsonFile(PROJECTS_FILE, data);
+        this.adapter.setProjects(data);
     }
 
     private saveDeployments(): void {
         const data = Object.fromEntries(this.deployments.entries());
-        writeJsonFile(DEPLOYMENTS_FILE, data);
+        this.adapter.setDeployments(data);
     }
 
     private saveTemplates(): void {
         const data = Object.fromEntries(this.templates.entries());
-        writeJsonFile(TEMPLATES_FILE, data);
+        this.adapter.setTemplates(data);
     }
 
     // Projects
