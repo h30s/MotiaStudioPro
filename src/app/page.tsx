@@ -26,6 +26,9 @@ export default function Home() {
                         <Link href="#templates" className="text-slate-300 hover:text-white transition-colors">
                             Templates
                         </Link>
+                        <Link href="/docs" className="text-slate-300 hover:text-white transition-colors">
+                            Docs
+                        </Link>
                         <Link href="/studio">
                             <Button className="bg-primary-600 hover:bg-primary-700">
                                 Get Started <ArrowRight className="ml-2 w-4 h-4" />
