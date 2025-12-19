@@ -6,9 +6,17 @@ import { FileCode, Play, Download, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
+interface ProjectData {
+    projectId: string;
+    name: string;
+    description: string;
+    files: Array<{ path: string; language: string; content?: string }>;
+    code?: string;
+    fileCount?: number;
+}
+
 interface CodeEditorProps {
-    initialCode: string | null;
-    projectId: string | null;
+    projectData: ProjectData | null;
     onDeploy: () => void;
 }
 
@@ -19,110 +27,27 @@ interface FileNode {
     language: string;
 }
 
-export function CodeEditor({ initialCode, projectId, onDeploy }: CodeEditorProps) {
+export function CodeEditor({ projectData, onDeploy }: CodeEditorProps) {
     const [selectedFile, setSelectedFile] = useState<FileNode | null>(null);
-    const [code, setCode] = useState(initialCode || "");
     const [copied, setCopied] = useState(false);
 
-    // Mock files for demo (in real app, these would come from the generated project)
-    const files: FileNode[] = [
-        {
-            name: "payment.ts",
-            path: "src/api/payment.ts",
-            content: `import { Step, workflow } from 'motia';
+    // Convert projectData files to FileNode format
+    const files: FileNode[] = projectData?.files?.map(f => ({
+        name: f.path.split('/').pop() || f.path,
+        path: f.path,
+        content: f.content || projectData.code || '',
+        language: f.language || 'typescript',
+    })) || [];
 
-// Payment processing endpoint
-export const processPayment = Step({
-  name: 'process-payment',
-  async handler(request: any) {
-    const { amount, cardToken, customerId } = request.body;
-    
-    // Validate input
-    if (!amount || !cardToken) {
-      return { success: false, error: 'Missing required fields' };
+    // Fallback to displaying code if no files structure
+    if (files.length === 0 && projectData?.code) {
+        files.push({
+            name: 'main.ts',
+            path: 'src/main.ts',
+            content: projectData.code,
+            language: 'typescript',
+        });
     }
-    
-    // Process payment logic
-    const paymentResult = await chargeCard(cardToken, amount);
-    
-    // Save to database
-    await saveTransaction({
-      customerId,
-      amount,
-      status: paymentResult.success ? 'completed' : 'failed',
-    });
-    
-    return {
-      success: paymentResult.success,
-      transactionId: paymentResult.id,
-    };
-  }
-});
-
-async function chargeCard(token: string, amount: number) {
-  // Stripe integration would go here
-  return { success: true, id: 'txn_' + Date.now() };
-}
-
-async function saveTransaction(data: any) {
-  // Database save logic
-  console.log('Saving transaction:', data);
-}`,
-            language: "typescript",
-        },
-        {
-            name: "fraud-detection.ts",
-            path: "src/workflows/fraud-detection.ts",
-            content: `import { workflow, Step } from 'motia';
-
-export const fraudDetectionWorkflow = workflow({
-  name: 'fraud-detection',
-  steps: [
-    Step({
-      name: 'analyze-transaction',
-      async handler(transaction: any) {
-        const riskScore = await analyzeWithAI(transaction);
-        return { riskScore };
-      }
-    }),
-    
-    Step({
-      name: 'make-decision',
-      async handler({ riskScore }: { riskScore: number }) {
-        if (riskScore > 0.8) {
-          return { action: 'block', reason: 'High risk detected' };
-        }
-        return { action: 'approve' };
-      }
-    })
-  ]
-});
-
-async function analyzeWithAI(transaction: any): Promise<number> {
-  // AI analysis logic
-  return Math.random();
-}`,
-            language: "typescript",
-        },
-        {
-            name: "config.ts",
-            path: "src/config.ts",
-            content: `export const config = {
-  stripe: {
-    apiKey: process.env.STRIPE_API_KEY || '',
-    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
-  },
-  ai: {
-    provider: 'openai',
-    model: 'gpt-4',
-  },
-  database: {
-    url: process.env.DATABASE_URL || '',
-  },
-};`,
-            language: "typescript",
-        },
-    ];
 
     const handleCopy = () => {
         if (selectedFile) {

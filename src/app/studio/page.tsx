@@ -9,10 +9,18 @@ import { VisualBuilder } from "@/components/studio/visual-builder";
 
 type View = "chat" | "code" | "visual" | "deploy";
 
+interface ProjectData {
+    projectId: string;
+    name: string;
+    description: string;
+    files: Array<{ path: string; language: string; content?: string }>;
+    code?: string;
+    fileCount?: number;
+}
+
 export default function StudioPage() {
     const [currentView, setCurrentView] = useState<View>("chat");
-    const [generatedCode, setGeneratedCode] = useState<string | null>(null);
-    const [currentProject, setCurrentProject] = useState<string | null>(null);
+    const [projectData, setProjectData] = useState<ProjectData | null>(null);
 
     const tabs = [
         { id: "chat" as View, label: "AI Chat", icon: Sparkles },
@@ -71,9 +79,8 @@ export default function StudioPage() {
             <main className="flex-1 overflow-hidden bg-slate-950" style={{ height: 'calc(100vh - 60px)' }}>
                 {currentView === "chat" && (
                     <ChatInterface
-                        onCodeGenerated={(code, projectId) => {
-                            setGeneratedCode(code);
-                            setCurrentProject(projectId);
+                        onCodeGenerated={(data) => {
+                            setProjectData(data);
                             setCurrentView("code");
                         }}
                     />
@@ -81,15 +88,14 @@ export default function StudioPage() {
 
                 {currentView === "code" && (
                     <CodeEditor
-                        initialCode={generatedCode}
-                        projectId={currentProject}
+                        projectData={projectData}
                         onDeploy={() => setCurrentView("deploy")}
                     />
                 )}
 
                 {currentView === "visual" && (
                     <VisualBuilder
-                        projectId={currentProject}
+                        projectId={projectData?.projectId || null}
                         onGenerateCode={() => setCurrentView("code")}
                         onDeploy={() => setCurrentView("deploy")}
                     />
@@ -97,7 +103,7 @@ export default function StudioPage() {
 
                 {currentView === "deploy" && (
                     <DeployPanel
-                        projectId={currentProject}
+                        projectId={projectData?.projectId || null}
                     />
                 )}
             </main>

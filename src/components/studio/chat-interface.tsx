@@ -13,7 +13,7 @@ interface Message {
 }
 
 interface ChatInterfaceProps {
-    onCodeGenerated: (code: string, projectId: string) => void;
+    onCodeGenerated: (data: any) => void;
 }
 
 export function ChatInterface({ onCodeGenerated }: ChatInterfaceProps) {
@@ -83,9 +83,9 @@ export function ChatInterface({ onCodeGenerated }: ChatInterfaceProps) {
             setMessages((prev) => [...prev, aiMessage]);
             toast.success("Code generated successfully!");
 
-            // Notify parent component
+            // Notify parent component with full data
             setTimeout(() => {
-                onCodeGenerated(data.code, data.projectId);
+                onCodeGenerated(data);
             }, 1000);
         } catch (error) {
             console.error("Generation error:", error);
