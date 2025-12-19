@@ -52,6 +52,7 @@ motia.log
 *.db
 *.sqlite
 *.db-journal
+.data/
 
 # Temporary files
 tmp/

@@ -10,14 +10,19 @@ export async function POST(
     try {
         const projectId = params.id;
 
+        console.log('[Deploy API] Received deployment request for project:', projectId);
+
         // Get project
         const project = db.getProject(projectId);
         if (!project) {
+            console.error('[Deploy API] Project not found:', projectId);
             return NextResponse.json(
-                { error: 'Project not found' },
+                { error: 'Project not found', projectId },
                 { status: 404 }
             );
         }
+
+        console.log('[Deploy API] Found project:', project.name);
 
         if (project.status !== 'ready') {
             return NextResponse.json(

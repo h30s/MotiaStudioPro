@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateId } from "@/lib/utils";
 import { aiService } from "@/lib/ai-service";
+import { db } from "@/lib/db";
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,6 +35,25 @@ export async function POST(request: NextRequest) {
     // Extract project name from description or first file
     const name = extractProjectName(description, files);
 
+    // ✅ SAVE PROJECT TO DATABASE
+    const project = db.createProject({
+      id: projectId,
+      userId: 'demo-user', // TODO: Get from auth session
+      name,
+      description: `AI-generated ${name} based on your description`,
+      status: 'ready',
+      language: language as 'typescript' | 'python' | 'go',
+      files: files.map(f => ({
+        path: f.path,
+        language: f.language,
+        content: f.content
+      })),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    console.log(`✅ Generated ${files.length} files and saved project to database`);
+
     const response = {
       projectId,
       name,
@@ -42,8 +62,6 @@ export async function POST(request: NextRequest) {
       code: files[0]?.content || '', // Return first file content for backwards compat
       fileCount: files.length,
     };
-
-    console.log(`✅ Generated ${files.length} files successfully`);
 
     return NextResponse.json(response);
   } catch (error) {
@@ -57,6 +75,7 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
 
 function extractProjectName(description: string, files: any[]): string {
   const lowerDesc = description.toLowerCase();
