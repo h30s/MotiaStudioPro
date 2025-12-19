@@ -29,35 +29,65 @@ export function DeployPanel({ projectId }: DeployPanelProps) {
     ]);
 
     const handleDeploy = async () => {
+        if (!projectId) return;
+
         setDeployStatus("deploying");
 
-        // Simulate deployment process
-        for (let i = 0; i < steps.length; i++) {
-            // Mark current step as running
+        try {
+            // Call real deployment API
+            const response = await fetch(`/api/deploy/${projectId}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+            });
+
+            if (!response.ok) {
+                throw new Error("Deployment failed");
+            }
+
+            const data = await response.json();
+            const deploymentId = data.deploymentId;
+
+            // Simulate deployment progress
+            for (let i = 0; i < steps.length; i++) {
+                setSteps((prev) =>
+                    prev.map((step, index) => ({
+                        ...step,
+                        status: index === i ? "running" : index < i ? "completed" : "pending",
+                    }))
+                );
+
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+
+                setSteps((prev) =>
+                    prev.map((step, index) => ({
+                        ...step,
+                        status: index <= i ? "completed" : "pending",
+                    }))
+                );
+            }
+
+            // Poll for deployment status
+            const statusResponse = await fetch(`/api/deployments/${deploymentId}`);
+            const statusData = await statusResponse.json();
+
+            if (statusData.success && statusData.data.status === "live") {
+                setDeploymentUrl(statusData.data.url || null);
+                setDeployStatus("success");
+                toast.success("Deployment successful!");
+            } else {
+                throw new Error("Deployment did not complete successfully");
+            }
+        } catch (error) {
+            console.error("Deployment error:", error);
+            setDeployStatus("error");
             setSteps((prev) =>
-                prev.map((step, index) => ({
+                prev.map((step) => ({
                     ...step,
-                    status: index === i ? "running" : index < i ? "completed" : "pending",
+                    status: step.status === "running" ? "error" : step.status,
                 }))
             );
-
-            // Wait for step to complete (simulate)
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-
-            // Mark as completed
-            setSteps((prev) =>
-                prev.map((step, index) => ({
-                    ...step,
-                    status: index <= i ? "completed" : "pending",
-                }))
-            );
+            toast.error("Deployment failed");
         }
-
-        // Deployment complete
-        const mockUrl = `https://payment-api-${Date.now().toString().slice(-6)}.motia.app`;
-        setDeploymentUrl(mockUrl);
-        setDeployStatus("success");
-        toast.success("Deployment successful!");
     };
 
     const handleCopyUrl = () => {
@@ -118,10 +148,10 @@ export function DeployPanel({ projectId }: DeployPanelProps) {
 
                                     <span
                                         className={`flex-1 ${step.status === "completed"
-                                                ? "text-slate-400 line-through"
-                                                : step.status === "running"
-                                                    ? "text-white font-semibold"
-                                                    : "text-slate-500"
+                                            ? "text-slate-400 line-through"
+                                            : step.status === "running"
+                                                ? "text-white font-semibold"
+                                                : "text-slate-500"
                                             }`}
                                     >
                                         {step.label}
